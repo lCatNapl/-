@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ game[0] }} - Узнавайкин{% endblock %}
+{% block content %}
+<div style="color: white; margin-bottom: 30px;">
+    <a href="/" style="color: white; display: inline-flex; align-items: center; gap: 10px; margin-bottom: 20px;">← Назад к играм</a>
+    <h1 style="text-align: center;">{{ game[0] }} {{ game[2] }}</h1>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+    {% for cat in main_cats %}
+    <div onclick="loadSubcats({{ cat[0] }})" style="background: rgba(255,255,255,0.95); padding: 25px; border-radius: 20px; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+        <h3>{{ cat[1] }}</h3>
+        <p>{{ cat[2] }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
