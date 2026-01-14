@@ -1,1 +1,2 @@
-web: python -c "from app import app, init_database; init_database()" && gunicorn app:app
+# ✅ ПРАВИЛЬНЫЙ Procfile (создать в корне)
+echo "web: gunicorn app:app" > Procfile
