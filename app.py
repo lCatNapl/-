@@ -1,10 +1,13 @@
 import os
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import (
+    LoginManager, UserMixin,
+    login_user, login_required, logout_user, current_user
+)
 from flask_bcrypt import Bcrypt
-from sqlalchemy import desc
+from sqlalchemy import or_
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'uznavaykin-info-2026!')
@@ -21,136 +24,318 @@ bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# МОДЕЛИ
+
+# ===================== МОДЕЛИ =====================
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120))
     password_hash = db.Column(db.String(120), nullable=False)
-    subscription = db.Column(db.String(20), default='start')
+    subscription = db.Column(db.String(20), default='start')  # start | vip | premium
     subscription_expires = db.Column(db.DateTime)
     avatar = db.Column(db.String(200))
     bio = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+
 class GameInfo(db.Model):
+    """
+    Примеры:
+    Майнкрафт - Блоки - Дёрн
+    Танки - СССР - 5 уровень - КВ-1
+    """
     id = db.Column(db.Integer, primary_key=True)
-    game = db.Column(db.String(50), nullable=False)  # Майнкрафт, Танки
-    faction = db.Column(db.String(50))  # Блоки, СССР
-    item = db.Column(db.String(50))  # Дёрн, КВ-1
-    level = db.Column(db.Integer)
+    game = db.Column(db.String(50), nullable=False)      # "Майнкрафт", "Танки"
+    faction = db.Column(db.String(50))                  # "Блоки", "СССР", "Руды", "Германия" и т.п.
+    item = db.Column(db.String(50), nullable=False)     # "Дёрн", "КВ-1", "Т-34" и т.д.
+    level = db.Column(db.Integer)                       # Уровень (для танков)
     description = db.Column(db.Text)
-    image = db.Column(db.String(200))
-    is_premium = db.Column(db.Boolean, default=False)  # Только для Premium
+    image = db.Column(db.String(200))                   # путь к картинке
+    is_premium = db.Column(db.Boolean, default=False)   # true = только для Premium
     views = db.Column(db.Integer, default=0)
+
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-def get_user_privilege():
+
+def get_user_privilege() -> str:
+    """Возвращает текущую привилегию: start / vip / premium."""
     if not current_user.is_authenticated:
         return 'start'
-    if current_user.subscription == 'premium' and current_user.subscription_expires and current_user.subscription_expires > datetime.utcnow():
-        return 'premium'
-    if current_user.subscription == 'vip' and current_user.subscription_expires and current_user.subscription_expires > datetime.utcnow():
-        return 'vip'
-    return 'start'
+    if current_user.subscription_expires and current_user.subscription_expires < datetime.utcnow():
+        # Подписка истекла
+        return 'start'
+    return current_user.subscription or 'start'
 
-# Инициализация БД с ИНФО
+
+# =============== ИНИЦИАЛИЗАЦИЯ БАЗЫ ===============
+
 with app.app_context():
     db.create_all()
-    
-    if GameInfo.query.count() == 0:
-        info_data = [
-            # Майнкрафт START
-            GameInfo(game="Майнкрафт", faction="Блоки", item="Дёрн", description="Обычная трава для строительства", image="grass.png"),
-            GameInfo(game="Майнкрафт", faction="Блоки", item="Камень", description="Базовый строительный блок", image="stone.png"),
-            
-            # Танки START  
-            GameInfo(game="Танки", faction="СССР", item="Т-34", level=5, description="Средний танк СССР", image="t34.png"),
-            
-            # VIP ЭКСКЛЮЗИВ
-            GameInfo(game="Майнкрафт", faction="Руды", item="Лазурит", description="Редкая синяя руда для декора", image="lapis.png", is_premium=False),
-            GameInfo(game="Танки", faction="СССР", item="ИС-3", level=7, description="Тяжёлый танк конца войны", image="is3.png", is_premium=False),
-            
-            # PREMIUM 3D
-            GameInfo(game="Майнкрафт", faction="Мобы", item="Эндермен", description="Таинственный моб из Энда с 3D моделью", image="ender3d.png", is_premium=True),
-            GameInfo(game="Танки", faction="Германия", item="Маус", level=10, description="Супертяж с 3D моделью", image="maus3d.png", is_premium=True),
-        ]
-        for info in info_data:
-            db.session.add(info)
-        db.session.commit()
 
-# МАРШРУТЫ
+    # Админы с премиумом «навсегда» (условно до 31.12.2030)
+    admins = [
+        {
+            'username': 'CatNap',
+            'email': 'catnap@uznavaykin.ru',
+            'password': '120187',
+            'subscription': 'premium'
+        },
+        {
+            'username': 'Назар',
+            'email': 'nazartrahov1@gmail.com',
+            'password': '120187',
+            'subscription': 'premium'
+        },
+    ]
+
+    for admin_data in admins:
+        existing = User.query.filter_by(username=admin_data['username']).first()
+        if not existing:
+            admin = User(
+                username=admin_data['username'],
+                email=admin_data['email'],
+                password_hash=bcrypt.generate_password_hash(
+                    admin_data['password']
+                ).decode('utf-8'),
+                subscription=admin_data['subscription'],
+                subscription_expires=datetime(2030, 12, 31, 23, 59, 59),
+            )
+            db.session.add(admin)
+            print(f"✅ СУПЕР-АДМИН '{admin_data['username']}' создан с PREMIUM до 31.12.2030")
+        else:
+            existing.subscription = 'premium'
+            existing.subscription_expires = datetime(2030, 12, 31, 23, 59, 59)
+            print(f"✅ Админ '{admin_data['username']}' обновлён (Premium до 31.12.2030)")
+
+    # Базовая инфа, если пусто
+    if GameInfo.query.count() == 0:
+        base_items = [
+            # Майнкрафт — Start
+            GameInfo(
+                game="Майнкрафт",
+                faction="Блоки",
+                item="Дёрн",
+                description="Обычный блок земли с травой. Подходит для строительства и ферм.",
+                image="/static/img/mc_dirt.png",
+                is_premium=False,
+            ),
+            GameInfo(
+                game="Майнкрафт",
+                faction="Блоки",
+                item="Камень",
+                description="Базовый строительный блок. Добывается из обычного камня киркой.",
+                image="/static/img/mc_stone.png",
+                is_premium=False,
+            ),
+            # Танки — Start
+            GameInfo(
+                game="Танки",
+                faction="СССР",
+                item="Т-34",
+                level=5,
+                description="Знаменитый советский средний танк. Баланс подвижности и брони.",
+                image="/static/img/wot_t34.png",
+                is_premium=False,
+            ),
+            GameInfo(
+                game="Танки",
+                faction="СССР",
+                item="КВ-1",
+                level=5,
+                description="Тяжёлый танк СССР с крепкой лобовой бронёй.",
+                image="/static/img/wot_kv1.png",
+                is_premium=False,
+            ),
+            # VIP (расширенная инфа)
+            GameInfo(
+                game="Майнкрафт",
+                faction="Руды",
+                item="Лазурит",
+                description="Синяя руда, используется для чар и декора. Доступно с VIP.",
+                image="/static/img/mc_lapis.png",
+                is_premium=False,  # VIP/Start различаем только по оформлению
+            ),
+            GameInfo(
+                game="Танки",
+                faction="СССР",
+                item="ИС-3",
+                level=7,
+                description="Тяжёлый танк с характерным «щучьим носом» и хорошим орудием.",
+                image="/static/img/wot_is3.png",
+                is_premium=False,
+            ),
+            # Premium (3D / топ инфа)
+            GameInfo(
+                game="Майнкрафт",
+                faction="Мобы",
+                item="Эндермен (3D)",
+                description="Высокий чёрный моб из Энда. 3D-модель и расширенное описание для Premium.",
+                image="/static/img/mc_enderman_3d.png",
+                is_premium=True,
+            ),
+            GameInfo(
+                game="Танки",
+                faction="Германия",
+                item="Маус (3D)",
+                level=10,
+                description="Супертяжёлый танк Германии. 3D‑модель и топовая аналитика для Premium.",
+                image="/static/img/wot_maus_3d.png",
+                is_premium=True,
+            ),
+        ]
+        db.session.add_all(base_items)
+        db.session.commit()
+        print("✅ Базовая информация по Майнкрафту и Танкам добавлена")
+
+
+# ===================== МАРШРУТЫ =====================
+
 @app.route('/')
 def index():
     privilege = get_user_privilege()
-    featured = GameInfo.query.filter(GameInfo.is_premium == (privilege == 'premium')).limit(6).all()
+    # На главной показываем микс обычных и, для премиум, премиум‑карточек
+    if privilege == 'premium':
+        featured = GameInfo.query.order_by(GameInfo.is_premium.desc(), GameInfo.views.desc()).limit(8).all()
+    else:
+        featured = GameInfo.query.filter(
+            or_(GameInfo.is_premium == False, GameInfo.is_premium.is_(None))
+        ).order_by(GameInfo.views.desc()).limit(8).all()
+
     return render_template('index.html', featured=featured, privilege=privilege)
+
 
 @app.route('/catalog/<game_name>')
 def catalog(game_name):
     privilege = get_user_privilege()
-    infos = GameInfo.query.filter_by(game=game_name).filter(
-        GameInfo.is_premium == False | (GameInfo.is_premium == True & privilege == 'premium')
-    ).all()
-    return render_template('catalog.html', game_name=game_name, infos=infos, privilege=privilege)
+    base_query = GameInfo.query.filter_by(game=game_name)
+
+    if privilege == 'premium':
+        infos = base_query.order_by(GameInfo.is_premium.desc(), GameInfo.faction, GameInfo.item).all()
+    else:
+        infos = base_query.filter(
+            or_(GameInfo.is_premium == False, GameInfo.is_premium.is_(None))
+        ).order_by(GameInfo.faction, GameInfo.item).all()
+
+    factions = (
+        db.session.query(GameInfo.faction)
+        .filter_by(game=game_name)
+        .distinct()
+        .all()
+    )
+    factions = [f[0] for f in factions if f[0]]
+
+    return render_template(
+        'catalog.html',
+        game_name=game_name,
+        infos=infos,
+        factions=factions,
+        privilege=privilege,
+    )
+
 
 @app.route('/info/<int:info_id>')
-def info(info_id):
-    info_item = GameInfo.query.get_or_404(info_id)
-    info_item.views += 1
-    db.session.commit()
+def info_detail(info_id):
     privilege = get_user_privilege()
-    return render_template('info_detail.html', info=info_item, privilege=privilege)
+    info = GameInfo.query.get_or_404(info_id)
+
+    # Если это премиум‑карточка, а у пользователя нет премиума – редирект
+    if info.is_premium and privilege != 'premium':
+        flash('Эта информация доступна только для Premium.')
+        return redirect(url_for('index'))
+
+    info.views += 1
+    db.session.commit()
+
+    return render_template('info_detail.html', info=info, privilege=privilege)
+
 
 @app.route('/profile')
 @login_required
 def profile():
-    return render_template('profile.html')
+    privilege = get_user_privilege()
+    return render_template('profile.html', privilege=privilege)
+
+
+@app.route('/profile/edit', methods=['POST'])
+@login_required
+def edit_profile():
+    current_user.bio = request.form.get('bio', '').strip()
+    current_user.avatar = request.form.get('avatar', '').strip()
+    db.session.commit()
+    flash('Профиль обновлён.')
+    return redirect(url_for('profile'))
+
 
 @app.route('/subscribe/<sub_type>')
 @login_required
 def subscribe(sub_type):
-    prices = {'vip': 100, 'premium': 200}
-    if sub_type in prices:
-        expires = datetime.utcnow() + timedelta(days=30)
-        current_user.subscription = sub_type
-        current_user.subscription_expires = expires
-        db.session.commit()
-        flash(f'✅ {sub_type.upper()} активирован на 30 дней!')
+    if sub_type not in ('vip', 'premium'):
+        flash('Неизвестный тип подписки.')
+        return redirect(url_for('profile'))
+
+    # «Навсегда» оставляем только админу, обычным — 30 дней
+    expires = datetime.utcnow() + timedelta(days=30)
+    current_user.subscription = sub_type
+    current_user.subscription_expires = expires
+    db.session.commit()
+    flash(f'Подписка {sub_type.upper()} активирована на 30 дней.')
     return redirect(url_for('profile'))
 
-# Остальные маршруты (login/register) как раньше...
+
+# ===================== АУТЕНТИФИКАЦИЯ =====================
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and bcrypt.check_password_hash(user.password_hash, request.form['password']):
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        user = User.query.filter_by(username=username).first()
+        if user and bcrypt.check_password_hash(user.password_hash, password):
             login_user(user)
             return redirect(url_for('index'))
-        flash('❌ Неверные данные!')
+
+        flash('Неверный логин или пароль.')
     return render_template('login.html')
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        if not User.query.filter_by(username=request.form['username']).first():
-            password = bcrypt.generate_password_hash(request.form['password']).decode('utf-8')
-            user = User(username=request.form['username'])
-            user.password_hash = password
-            db.session.add(user)
-            db.session.commit()
-            flash('✅ Регистрация успешна!')
-            return redirect(url_for('login'))
-        flash('❌ Пользователь существует!')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        email = request.form.get('email', '').strip() or None
+
+        if not username or not password:
+            flash('Логин и пароль обязательны.')
+            return redirect(url_for('register'))
+
+        if User.query.filter_by(username=username).first():
+            flash('Пользователь с таким логином уже существует.')
+            return redirect(url_for('register'))
+
+        password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+        user = User(username=username, email=email, password_hash=password_hash)
+        db.session.add(user)
+        db.session.commit()
+        flash('Регистрация успешна! Теперь войдите.')
+        return redirect(url_for('login'))
+
     return render_template('register.html')
 
+
 @app.route('/logout')
+@login_required
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+
+# ===================== ЗАПУСК =====================
 
 if __name__ == '__main__':
     app.run(debug=True)
