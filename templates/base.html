@@ -13,7 +13,10 @@
         </div>
         <div class="nav-menu">
             <a href="{{ url_for('index') }}">Главная</a>
-            <a href="{{ url_for('catalog') }}">Каталог</a>
+
+            <!-- ВАЖНО: добавляем game_name -->
+            <a href="{{ url_for('catalog', game_name='Майнкрафт') }}">Каталог</a>
+
             {% if current_user.is_authenticated %}
                 <a href="{{ url_for('profile') }}">Профиль 
                     <span class="status status-{{ current_user.subscription|lower }}">{{ current_user.subscription|upper }}</span>
