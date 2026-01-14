@@ -1,1 +1,1 @@
-web: gunicorn uznavaykin.app:app
+web: gunicorn app:app
