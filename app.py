@@ -1,10 +1,15 @@
 import os
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash
+
+from flask import (
+    Flask, render_template, request,
+    redirect, url_for, flash
+)
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
     LoginManager, UserMixin,
-    login_user, login_required, logout_user, current_user
+    login_user, login_required,
+    logout_user, current_user
 )
 from flask_bcrypt import Bcrypt
 from sqlalchemy import or_
@@ -13,7 +18,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'uznavaykin-info-2026!')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# База данных
+# Путь к БД
 INSTANCE_PATH = os.path.join(os.path.dirname(__file__), 'instance')
 os.makedirs(INSTANCE_PATH, exist_ok=True)
 DB_PATH = os.path.join(INSTANCE_PATH, 'uznavaykin.db')
@@ -66,9 +71,17 @@ def get_user_privilege() -> str:
     if not current_user.is_authenticated:
         return 'start'
     if current_user.subscription_expires and current_user.subscription_expires < datetime.utcnow():
-        # Подписка истекла
         return 'start'
     return current_user.subscription or 'start'
+
+
+def get_theme_for_game(game_name: str) -> str:
+    """Тема по игре: minecraft / wot / default."""
+    if game_name == 'Майнкрафт':
+        return 'minecraft'
+    if game_name == 'Танки':
+        return 'wot'
+    return 'default'
 
 
 # =============== ИНИЦИАЛИЗАЦИЯ БАЗЫ ===============
@@ -157,7 +170,7 @@ with app.app_context():
                 item="Лазурит",
                 description="Синяя руда, используется для чар и декора. Доступно с VIP.",
                 image="/static/img/mc_lapis.png",
-                is_premium=False,  # VIP/Start различаем только по оформлению
+                is_premium=False,
             ),
             GameInfo(
                 game="Танки",
@@ -197,36 +210,48 @@ with app.app_context():
 @app.route('/')
 def index():
     privilege = get_user_privilege()
-    # На главной показываем микс обычных и, для премиум, премиум‑карточек
+
     if privilege == 'premium':
-        featured = GameInfo.query.order_by(GameInfo.is_premium.desc(), GameInfo.views.desc()).limit(8).all()
+        featured = GameInfo.query.order_by(
+            GameInfo.is_premium.desc(),
+            GameInfo.views.desc()
+        ).limit(8).all()
     else:
         featured = GameInfo.query.filter(
             or_(GameInfo.is_premium == False, GameInfo.is_premium.is_(None))
         ).order_by(GameInfo.views.desc()).limit(8).all()
 
-    return render_template('index.html', featured=featured, privilege=privilege)
+    return render_template(
+        'index.html',
+        featured=featured,
+        privilege=privilege,
+        theme='default'
+    )
 
 
 @app.route('/catalog/<game_name>')
 def catalog(game_name):
     privilege = get_user_privilege()
+    theme = get_theme_for_game(game_name)
+
     base_query = GameInfo.query.filter_by(game=game_name)
 
     if privilege == 'premium':
-        infos = base_query.order_by(GameInfo.is_premium.desc(), GameInfo.faction, GameInfo.item).all()
+        infos = base_query.order_by(
+            GameInfo.is_premium.desc(),
+            GameInfo.faction,
+            GameInfo.item
+        ).all()
     else:
         infos = base_query.filter(
             or_(GameInfo.is_premium == False, GameInfo.is_premium.is_(None))
         ).order_by(GameInfo.faction, GameInfo.item).all()
 
-    factions = (
-        db.session.query(GameInfo.faction)
-        .filter_by(game=game_name)
-        .distinct()
-        .all()
-    )
-    factions = [f[0] for f in factions if f[0]]
+    factions = [
+        f[0] for f in db.session.query(GameInfo.faction)
+        .filter_by(game=game_name).distinct().all()
+        if f[0]
+    ]
 
     return render_template(
         'catalog.html',
@@ -234,6 +259,7 @@ def catalog(game_name):
         infos=infos,
         factions=factions,
         privilege=privilege,
+        theme=theme,
     )
 
 
@@ -241,8 +267,8 @@ def catalog(game_name):
 def info_detail(info_id):
     privilege = get_user_privilege()
     info = GameInfo.query.get_or_404(info_id)
+    theme = get_theme_for_game(info.game)
 
-    # Если это премиум‑карточка, а у пользователя нет премиума – редирект
     if info.is_premium and privilege != 'premium':
         flash('Эта информация доступна только для Premium.')
         return redirect(url_for('index'))
@@ -250,14 +276,19 @@ def info_detail(info_id):
     info.views += 1
     db.session.commit()
 
-    return render_template('info_detail.html', info=info, privilege=privilege)
+    return render_template(
+        'info_detail.html',
+        info=info,
+        privilege=privilege,
+        theme=theme
+    )
 
 
 @app.route('/profile')
 @login_required
 def profile():
     privilege = get_user_privilege()
-    return render_template('profile.html', privilege=privilege)
+    return render_template('profile.html', privilege=privilege, theme='default')
 
 
 @app.route('/profile/edit', methods=['POST'])
@@ -277,7 +308,7 @@ def subscribe(sub_type):
         flash('Неизвестный тип подписки.')
         return redirect(url_for('profile'))
 
-    # «Навсегда» оставляем только админу, обычным — 30 дней
+    # Обычным пользователям подписка на 30 дней
     expires = datetime.utcnow() + timedelta(days=30)
     current_user.subscription = sub_type
     current_user.subscription_expires = expires
@@ -300,7 +331,7 @@ def login():
             return redirect(url_for('index'))
 
         flash('Неверный логин или пароль.')
-    return render_template('login.html')
+    return render_template('login.html', theme='default')
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -325,7 +356,7 @@ def register():
         flash('Регистрация успешна! Теперь войдите.')
         return redirect(url_for('login'))
 
-    return render_template('register.html')
+    return render_template('register.html', theme='default')
 
 
 @app.route('/logout')
@@ -339,4 +370,3 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
