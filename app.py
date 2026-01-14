@@ -3,14 +3,13 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_bcrypt import Bcrypt
-from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import desc
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-prod!')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Создаем папку instance для БД
+# ✅ Создаем папку instance для БД
 INSTANCE_PATH = os.path.join(os.path.dirname(__file__), 'instance')
 os.makedirs(INSTANCE_PATH, exist_ok=True)
 DB_PATH = os.path.join(INSTANCE_PATH, 'games.db')
@@ -21,7 +20,7 @@ bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Модели
+# ✅ МОДЕЛИ (оставьте как есть)
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -39,6 +38,29 @@ class User(UserMixin, db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# ✅ ИНИЦИАЛИЗАЦИЯ БД ПРИ КАЖДОМ ЗАПУСКЕ (GUNICORN + LOCAL)
+def init_database():
+    """Инициализация БД при запуске - РАБОТАЕТ с Gunicorn"""
+    try:
+        with app.app_context():
+            db.create_all()
+            
+            # ✅ Тестовые данные (Game определена выше)
+            if Game.query.count() == 0:
+                test_games = [
+                    Game(name="Змейка", description="Классическая змейка", rating=4.8, is_featured=True),
+                    Game(name="Тетрис", description="Классический тетрис", rating=4.7, is_featured=True),
+                    Game(name="Крестики-нолики", description="Игра на двоих", rating=4.2),
+                ]
+                for game in test_games:
+                    db.session.add(game)
+                db.session.commit()
+                print("✅ Тестовые данные добавлены")
+            print("✅ База данных готова!")
+    except Exception as e:
+        print(f"⚠️ Ошибка БД: {e}")
+
+# ✅ МАРШРУТЫ
 @app.route('/')
 def index():
     games = Game.query.order_by(desc(Game.is_featured), desc(Game.rating)).limit(12).all()
@@ -83,7 +105,7 @@ def play(game_id):
     db.session.commit()
     return f"Игра {game.name} (просмотров: {game.plays})"
 
+# ✅ ЕДИНСТВЕННЫЙ if __name__ - ВЫЗЫВАЕТ ИНИЦИАЛИЗАЦИЮ
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()  # Только для локальной разработки
+    init_database()  # ✅ Запуск ИНИЦИАЛИЗАЦИИ
     app.run(debug=True)
