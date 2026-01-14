@@ -80,7 +80,7 @@ with app.app_context():
     admins = [
         {
             'username': 'CatNap',
-            'email': 'catnap@uznavaykin.ru',
+            'email': 'nazartrahov1@gmail.com',
             'password': '120187',
             'subscription': 'premium'
         },
@@ -339,3 +339,4 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
