@@ -1,68 +1,55 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="hero">
-    <h1><i class="fas fa-trophy"></i> Добро пожаловать в Узнавайкин!</h1>
-    <p>Лучшие браузерные игры с подпиской VIP и Premium</p>
+<!-- ГЕРОЙСКИЙ БАННЕР ПО PRIVILEGE -->
+<div class="hero hero-{{ privilege }}">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <i class="fas fa-database"></i> 
+            УЗНАВАЙКИН {{ privilege|upper }}
+        </h1>
+        <p class="hero-subtitle">
+            {% if privilege == 'premium' %}
+                Лучшая информация + 3D модели
+            {% elif privilege == 'vip' %}
+                Эксклюзивная информация + новые темы  
+            {% else %}
+                Базовая информация для всех
+            {% endif %}
+        </p>
+    </div>
 </div>
 
-<div class="section featured">
-    <h2><i class="fas fa-star"></i> Рекомендуемые</h2>
+<!-- КАТАЛОГ ИНФО -->
+<div class="section catalog-preview">
+    <h2><i class="fas fa-list"></i> Популярная информация</h2>
     <div class="games-grid">
-        {% for game in featured %}
-        <div class="game-card featured">
-            <img src="{{ game.image or '/static/img/default.jpg' }}" alt="{{ game.name }}">
-            <h3>{{ game.name }}</h3>
-            <div class="game-meta">
-                <span class="rating"><i class="fas fa-star"></i> {{ "%.1f"|format(game.rating) }}</span>
-                <span class="plays"><i class="fas fa-play"></i> {{ game.plays }}</span>
+        {% for item in featured %}
+        <a href="{{ url_for('info', info_id=item.id) }}" class="info-card info-{{ privilege }}">
+            <div class="info-image" style="background-image: url('{{ item.image or '/static/img/default.jpg' }}')">
+                {% if privilege == 'premium' and item.is_premium %}
+                    <span class="premium-badge">3D</span>
+                {% endif %}
             </div>
-            <a href="{{ url_for('play', game_id=game.id) }}" class="play-btn">
-                <i class="fas fa-play"></i> Играть
-            </a>
-        </div>
+            <div class="info-content">
+                <h3>{{ item.game }} → {{ item.faction }}</h3>
+                <p class="info-item">{{ item.item }}</p>
+                {% if item.level %}
+                    <span class="level-badge">Ур. {{ item.level }}</span>
+                {% endif %}
+                <span class="views">{{ item.views }} просмотров</span>
+            </div>
+        </a>
         {% endfor %}
     </div>
 </div>
 
-<div class="section popular">
-    <h2><i class="fas fa-fire"></i> Популярные</h2>
-    <div class="games-grid">
-        {% for game in popular %}
-        <div class="game-card">
-            <h3>{{ game.name }}</h3>
-            <p>{{ game.description[:60] }}...</p>
-            <a href="{{ url_for('play', game_id=game.id) }}" class="play-btn secondary">Играть</a>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<div class="subscription-promo">
-    <div class="promo-card vip">
-        <h3><i class="fas fa-crown"></i> VIP - 100₽/мес</h3>
-        <ul>
-            <li>Новые темы и цвета</li>
-            <li>Статус VIP</li>
-            <li>Эксклюзивные картинки</li>
-        </ul>
-        {% if current_user.is_authenticated %}
-            <a href="{{ url_for('subscribe', sub_type='vip') }}" class="btn vip-btn">Активировать VIP</a>
-        {% else %}
-            <a href="{{ url_for('register') }}" class="btn vip-btn">Получить VIP</a>
-        {% endif %}
-    </div>
-    <div class="promo-card premium">
-        <h3><i class="fas fa-gem"></i> Premium - 200₽/мес</h3>
-        <ul>
-            <li>ВСЕ VIP + 3D изображения</li>
-            <li>Статус Premium</li>
-            <li>Лучшие темы навсегда*</li>
-        </ul>
-        {% if current_user.is_authenticated %}
-            <a href="{{ url_for('subscribe', sub_type='premium') }}" class="btn premium-btn">Активировать Premium</a>
-        {% else %}
-            <a href="{{ url_for('register') }}" class="btn premium-btn">Получить Premium</a>
-        {% endif %}
-    </div>
+<!-- КНОПКИ КАТАЛОГОВ -->
+<div class="catalog-buttons">
+    <a href="{{ url_for('catalog', game_name='Майнкрафт') }}" class="catalog-btn minecraft">
+        <i class="fab fa-minecraft"></i> МАЙНКРАФТ
+    </a>
+    <a href="{{ url_for('catalog', game_name='Танки') }}" class="catalog-btn tanks">
+        <i class="fas fa-crosshairs"></i> ТАНКИ
+    </a>
 </div>
 {% endblock %}
