@@ -1,0 +1,206 @@
+profile
+{% extends "base.html" %}
+
+{% block title %}Профиль - {{ current_user.username }}{% endblock %}
+
+{% block content %}
+<div class="profile-hero">
+    <div class="profile-header">
+        <div class="avatar-section">
+            <div class="avatar-container">
+                {% if current_user.avatar %}
+                    <img src="{{ current_user.avatar }}" alt="Аватар" class="avatar">
+                {% else %}
+                    <div class="avatar-placeholder" style="background-color: {{ current_user.profile_color }};">
+                        <i class="fas fa-user"></i>
+                    </div>
+                {% endif %}
+                <label for="avatar-upload" class="avatar-upload-btn">
+                    <i class="fas fa-camera"></i>
+                    <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+                </label>
+            </div>
+        </div>
+        
+        <div class="profile-info">
+            <h2>{{ current_user.username }}</h2>
+            <div class="subscription-status">
+                <span class="status-badge status-{{ current_user.subscription_type }}">
+                    {{ current_user.subscription_type.upper() }}
+                </span>
+                {% if current_user.subscription_end %}
+                    <span class="subscription-date">
+                        До: {{ current_user.subscription_end.strftime('%d.%m.%Y') }}
+                    </span>
+                {% else %}
+                    <span class="subscription-lifetime">Навсегда</span>
+                {% endif %}
+            </div>
+            <div class="user-stats">
+                <span>Premium слотов использовано: {{ current_user.premium_slots_used }}/1</span>
+                <span>VIP слотов использовано: {{ current_user.vip_slots_used }}/3</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="profile-content">
+    <div class="profile-tabs">
+        <button class="tab-btn active" data-tab="settings">⚙️ Настройки</button>
+        <button class="tab-btn" data-tab="subscriptions">💎 Подписки</button>
+        <button class="tab-btn" data-tab="telegram">📱 Telegram</button>
+    </div>
+
+    <!-- Вкладка Настройки -->
+    <div id="settings" class="tab-content active">
+        <form method="POST" enctype="multipart/form-data" class="profile-form">
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                <label>Имя пользователя</label>
+                <input type="text" name="username" value="{{ current_user.username }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" value="{{ current_user.email }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Цвет профиля</label>
+                <input type="color" name="profile_color" value="{{ current_user.profile_color }}">
+                <span class="color-preview" style="background-color: {{ current_user.profile_color }};"></span>
+            </div>
+            
+            <div class="form-group">
+                <label>Ссылка на Telegram</label>
+                <input type="url" name="telegram_link" value="{{ current_user.telegram_link }}" 
+                       placeholder="https://t.me/yourchannel">
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-large">Сохранить изменения</button>
+        </form>
+    </div>
+
+    <!-- Вкладка Подписки -->
+    <div id="subscriptions" class="tab-content">
+        <h3>Текущая подписка: <strong>{{ current_user.subscription_type.upper() }}</strong></h3>
+        
+        <div class="upgrade-section">
+            <h4>Обновить подписку</h4>
+            <div class="pricing-grid">
+                {% for plan in plans %}
+                <div class="plan-card plan-{{ plan.name }} 
+                    {% if current_user.subscription_type == plan.name %}active current-plan{% endif %}">
+                    <h5>{{ plan.name.upper() }}</h5>
+                    <div class="price">
+                        {% if plan.price == 0 %}Бесплатно{% else %}{{ plan.price }}₽/мес{% endif %}
+                    </div>
+                    <ul>
+                        {% if plan.name == 'start' %}
+                            <li>✅ Базовый доступ к каталогу</li>
+                            <li>📱 Адаптивный дизайн</li>
+                        {% elif plan.name == 'vip' %}
+                            <li>🎨 Новые темы и цвета</li>
+                            <li>🖼️ Улучшенные изображения</li>
+                            <li>🏆 Статус VIP</li>
+                            <li><strong>🎁 3 слота навсегда</strong></li>
+                        {% elif plan.name == 'premium' %}
+                            <li>⭐ Лучшая информация</li>
+                            <li>🕶️ 3D изображения</li>
+                            <li>💎 Лучшие темы</li>
+                            <li><strong>🎁 1 Premium + 3 VIP навсегда</strong></li>
+                        {% endif %}
+                    </ul>
+                    {% if current_user.subscription_type != plan.name %}
+                        <a href="{{ url_for('subscribe', plan_name=plan.name) }}" 
+                           class="btn btn-{{ plan.name }}">
+                            Перейти на {{ plan.name.upper() }}
+                        </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Вкладка Telegram -->
+    <div id="telegram" class="tab-content">
+        <div class="telegram-section">
+            <h4>Привязать Telegram аккаунт</h4>
+            <p>Получи эксклюзивные уведомления и доступ к сообществу</p>
+            
+            <button id="generate-telegram-link" class="btn btn-outline">
+                <i class="fab fa-telegram"></i> Создать ссылку
+            </button>
+            
+            <div id="telegram-result" style="display: none; margin-top: 1rem;">
+                <p>Перейди по ссылке в Telegram:</p>
+                <div class="telegram-link-container">
+                    <input type="text" id="telegram-url" readonly>
+                    <button id="copy-telegram-link" class="btn-copy">Копировать</button>
+                </div>
+            </div>
+            
+            {% if current_user.telegram_link %}
+                <div class="telegram-connected">
+                    <i class="fas fa-check-circle"></i>
+                    <p>Telegram уже привязан: <a href="{{ current_user.telegram_link }}" target="_blank">{{ current_user.telegram_link }}</a></p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Загрузка аватара
+    document.getElementById('avatar-upload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('avatar', file);
+            
+            fetch('{{ url_for("profile") }}', {
+                method: 'POST',
+                body: formData
+            }).then(() => location.reload());
+        }
+    });
+
+    // Вкладки профиля
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.tab).classList.add('active');
+        });
+    });
+
+    // Telegram ссылка
+    document.getElementById('generate-telegram-link').addEventListener('click', function() {
+        fetch('{{ url_for("link_telegram") }}')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('telegram-url').value = data.telegram_link;
+                document.getElementById('telegram-result').style.display = 'block';
+                document.getElementById('generate-telegram-link').textContent = 'Ссылка создана!';
+            });
+    });
+
+    // Копирование ссылки
+    document.getElementById('copy-telegram-link').addEventListener('click', function() {
+        navigator.clipboard.writeText(document.getElementById('telegram-url').value);
+        this.textContent = 'Скопировано!';
+        setTimeout(() => this.textContent = 'Копировать', 2000);
+    });
+});
+</script>
+{% endblock %}

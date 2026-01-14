@@ -1,0 +1,51 @@
+register
+{% extends "base.html" %}
+
+{% block title %}Регистрация - Узнавайкин{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <i class="fas fa-user-plus"></i>
+            <h2>Присоединяйся к Узнавайкин!</h2>
+            <p>Создай аккаунт и открой мир эксклюзивных игр</p>
+        </div>
+        
+        <form method="POST" class="auth-form">
+            <div class="form-group">
+                <label><i class="fas fa-user"></i> Имя пользователя</label>
+                <input type="text" name="username" required 
+                       placeholder="Введи уникальное имя" maxlength="80">
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-envelope"></i> Email</label>
+                <input type="email" name="email" required 
+                       placeholder="example@mail.ru">
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-lock"></i> Пароль</label>
+                <input type="password" name="password" required 
+                       placeholder="Минимум 6 символов" minlength="6">
+            </div>
+            
+            <div class="form-group checkbox-group">
+                <label>
+                    <input type="checkbox" required>
+                    Согласен с <a href="#">правилами</a> и <a href="#">политикой конфиденциальности</a>
+                </label>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-large btn-full">
+                <i class="fas fa-rocket"></i> Создать аккаунт
+            </button>
+        </form>
+        
+        <div class="auth-footer">
+            <p>Уже есть аккаунт? <a href="{{ url_for('login') }}">Войти</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

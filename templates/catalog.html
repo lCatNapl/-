@@ -1,0 +1,234 @@
+catalog
+{% extends "base.html" %}
+
+{% block title %}Каталог игр - Узнавайкин{% endblock %}
+
+{% block content %}
+<div class="catalog-header">
+    <h2><i class="fas fa-gamepad"></i> Каталог игр ({{ games.total }})</h2>
+    
+    <!-- Фильтры -->
+    <div class="filters">
+        <div class="filter-group">
+            <select id="category-filter" class="filter-select">
+                <option value="all">Все категории</option>
+                <option value="action">Экшен</option>
+                <option value="rpg">RPG</option>
+                <option value="strategy">Стратегия</option>
+                <option value="racing">Гонки</option>
+                <option value="puzzle">Головоломки</option>
+                <option value="multiplayer">Мультиплеер</option>
+            </select>
+            
+            <select id="sort-filter" class="filter-select">
+                <option value="rating-desc">По рейтингу ↓</option>
+                <option value="rating-asc">По рейтингу ↑</option>
+                <option value="newest">Новинки</option>
+                <option value="title">По названию</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <input type="text" id="search-input" placeholder="🔍 Поиск по названию...">
+            <button id="clear-filters" class="btn btn-outline">Очистить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Счетчики и пагинация -->
+<div class="catalog-stats">
+    <span>Показаны игры {{ games.start - games.per_page + 1 }}–{{ games.start }} из {{ games.total }}</span>
+    {% if games.has_prev %}
+        <a href="{{ url_for('catalog', page=games.prev_num, category=request.args.get('category', 'all')) }}" class="page-link">← Предыдущие</a>
+    {% endif %}
+    
+    {% if games.has_next %}
+        <a href="{{ url_for('catalog', page=games.next_num, category=request.args.get('category', 'all')) }}" class="page-link">Следующие →</a>
+    {% endif %}
+</div>
+
+<!-- Сетка игр -->
+<div class="games-grid" id="games-grid">
+    {% for game in games.items %}
+    <div class="game-card" data-game-id="{{ game.id }}" data-category="{{ game.category }}" data-rating="{{ game.rating }}" data-title="{{ game.title|lower }}">
+        <div class="game-image">
+            {% if current_user.is_authenticated and current_user.subscription_type == 'premium' and game.image_premium_3d %}
+                <div class="premium-3d-badge">3D</div>
+                <div class="game-3d-placeholder">
+                    <i class="fas fa-cube"></i>
+                    <span>Premium 3D</span>
+                </div>
+            {% elif current_user.is_authenticated and current_user.subscription_type in ['vip', 'premium'] and game.image_vip %}
+                <div class="vip-image-badge">VIP</div>
+                <img src="{{ game.image_vip }}" alt="{{ game.title }}" loading="lazy">
+            {% else %}
+                <img src="{{ game.image_start or '/static/images/default-game.jpg' }}" alt="{{ game.title }}" loading="lazy">
+            {% endif %}
+            
+            {% if game.is_featured %}
+                <div class="featured-badge">⭐ Рекомендуем</div>
+            {% endif %}
+            
+            {% if current_user.is_authenticated and current_user.subscription_type != 'start' %}
+                <div class="subscription-exclusive">
+                    {% if current_user.subscription_type == 'vip' or (current_user.subscription_type == 'premium' and game.image_vip) %}
+                        <i class="fas fa-crown"></i>
+                    {% elif current_user.subscription_type == 'premium' and game.image_premium_3d %}
+                        <i class="fas fa-gem"></i>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="game-info">
+            <div class="game-header">
+                <h4>{{ game.title }}</h4>
+                <span class="category-badge category-{{ game.category }}">{{ game.category }}</span>
+            </div>
+            
+            <div class="rating" style="--rating: {{ game.rating / 5 }}">
+                ★ {{ "%.1f"|format(game.rating) }}/5
+            </div>
+            
+            <p class="description">
+                {% if current_user.is_authenticated %}
+                    {{ game.get_description(current_user.subscription_type)|truncate(120) }}
+                {% else %}
+                    {{ game.get_description('start')|truncate(120) }}
+                {% endif %}
+            </p>
+            
+            <div class="game-actions">
+                <a href="{{ url_for('game_detail', game_id=game.id) }}" class="btn btn-primary btn-small">
+                    <i class="fas fa-eye"></i> Подробнее
+                </a>
+                {% if current_user.is_authenticated %}
+                    <button class="btn-favorite" data-game-id="{{ game.id }}" title="В избранное">
+                        <i class="far fa-heart"></i>
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="no-games">
+        <i class="fas fa-gamepad"></i>
+        <h3>Игр пока нет</h3>
+        <p>Скоро здесь появится каталог крутых игр!</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Пагинация снизу -->
+<div class="catalog-stats pagination-bottom">
+    {% if games.has_prev %}
+        <a href="{{ url_for('catalog', page=games.prev_num, category=request.args.get('category', 'all')) }}" class="page-link">← Предыдущие</a>
+    {% endif %}
+    
+    <span>Страница {{ games.page }} из {{ games.pages }}</span>
+    
+    {% if games.has_next %}
+        <a href="{{ url_for('catalog', page=games.next_num, category=request.args.get('category', 'all')) }}" class="page-link">Следующие →</a>
+    {% endif %}
+</div>
+
+<!-- Модальное окно для быстрого просмотра -->
+<div id="quick-view-modal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close">&times;</span>
+        <div id="modal-game-content"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const grid = document.getElementById('games-grid');
+    let currentGames = Array.from(grid.children);
+
+    // Фильтрация и сортировка
+    function applyFilters() {
+        const category = document.getElementById('category-filter').value;
+        const sort = document.getElementById('sort-filter').value;
+        const search = document.getElementById('search-input').value.toLowerCase();
+
+        let filteredGames = currentGames.filter(game => {
+            const gameCategory = game.dataset.category;
+            const gameTitle = game.dataset.title;
+            
+            return (!category || category === 'all' || gameCategory === category) &&
+                   (!search || gameTitle.includes(search));
+        });
+
+        // Сортировка
+        filteredGames.sort((a, b) => {
+            switch(sort) {
+                case 'rating-desc':
+                    return parseFloat(b.dataset.rating) - parseFloat(a.dataset.rating);
+                case 'rating-asc':
+                    return parseFloat(a.dataset.rating) - parseFloat(b.dataset.rating);
+                case 'newest':
+                    return b.dataset.createdAt - a.dataset.createdAt || 0;
+                case 'title':
+                    return a.dataset.title.localeCompare(b.dataset.title);
+                default:
+                    return 0;
+            }
+        });
+
+        // Перерисовка сетки
+        grid.innerHTML = '';
+        filteredGames.forEach(game => grid.appendChild(game));
+        
+        updateStats();
+    }
+
+    // Обработчики фильтров
+    document.getElementById('category-filter').addEventListener('change', applyFilters);
+    document.getElementById('sort-filter').addEventListener('change', applyFilters);
+    document.getElementById('search-input').addEventListener('input', applyFilters);
+
+    // Очистка фильтров
+    document.getElementById('clear-filters').addEventListener('click', function() {
+        document.getElementById('category-filter').value = 'all';
+        document.getElementById('sort-filter').value = 'rating-desc';
+        document.getElementById('search-input').value = '';
+        applyFilters();
+    });
+
+    // Избранное (локальное хранение)
+    document.querySelectorAll('.btn-favorite').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const gameId = this.dataset.gameId;
+            const icon = this.querySelector('i');
+            
+            if (icon.classList.contains('far')) {
+                icon.classList.remove('far');
+                icon.classList.add('fas');
+                icon.style.color = '#E74C3C';
+                this.title = 'Убрать из избранного';
+            } else {
+                icon.classList.remove('fas');
+                icon.classList.add('far');
+                icon.style.color = '';
+                this.title = 'В избранное';
+            }
+        });
+    });
+
+    // Быстрый просмотр (заглушка)
+    grid.addEventListener('click', function(e) {
+        if (e.target.closest('.game-card')) {
+            const gameCard = e.target.closest('.game-card');
+            // Здесь можно добавить AJAX загрузку деталей игры
+        }
+    });
+
+    function updateStats() {
+        const visibleGames = document.querySelectorAll('#games-grid .game-card');
+        console.log(`Показаны ${visibleGames.length} игр`);
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,96 @@
+index
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero">
+    <h2>Добро пожаловать в мир игр!</h2>
+    {% if not current_user.is_authenticated %}
+        <p>Зарегистрируйся и открой доступ к эксклюзивному контенту</p>
+        <div class="cta-buttons">
+            <a href="{{ url_for('register') }}" class="btn btn-primary btn-large">Начать бесплатно</a>
+            <a href="{{ url_for('login') }}" class="btn btn-outline">У меня есть аккаунт</a>
+        </div>
+    {% else %}
+        <p>Твой уровень: <strong>{{ current_user.subscription_type.upper() }}</strong></p>
+        <a href="{{ url_for('catalog') }}" class="btn btn-primary btn-large">Перейти к каталогу</a>
+    {% endif %}
+</div>
+
+<div class="section">
+    <h3>🎮 Популярные игры</h3>
+    <div class="games-grid">
+        {% for game in games %}
+        <div class="game-card">
+            <div class="game-image">
+                {% if current_user.is_authenticated %}
+                    <img src="{{ game.get_image(current_user.subscription_type) }}" alt="{{ game.title }}" loading="lazy">
+                {% else %}
+                    <img src="{{ game.get_image('start') }}" alt="{{ game.title }}" loading="lazy">
+                {% endif %}
+                {% if game.is_featured %}
+                    <div class="featured-badge">⭐ Рекомендуем</div>
+                {% endif %}
+            </div>
+            <div class="game-info">
+                <h4>{{ game.title }}</h4>
+                <div class="rating" style="--rating: {{ game.rating / 5 }}">
+                    ★ {{ "%.1f"|format(game.rating) }}
+                </div>
+                <p class="description">
+                    {% if current_user.is_authenticated %}
+                        {{ game.get_description(current_user.subscription_type)|truncate(100) }}
+                    {% else %}
+                        {{ game.get_description('start')|truncate(100) }}
+                    {% endif %}
+                </p>
+                <a href="{{ url_for('game_detail', game_id=game.id) }}" class="btn btn-small">Подробнее</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="section pricing-section">
+    <h3>💎 Выбери свою подписку</h3>
+    <div class="pricing-grid">
+        <div class="plan-card plan-start">
+            <h4>Start</h4>
+            <div class="price">0₽</div>
+            <ul>
+                <li>Базовый доступ</li>
+                <li>Основные изображения</li>
+                <li>Стандартные описания</li>
+            </ul>
+            {% if current_user.is_authenticated and current_user.subscription_type == 'start' %}
+                <span class="current-plan">Текущий план</span>
+            {% else %}
+                <a href="{{ url_for('profile') }}" class="btn">Выбрать</a>
+            {% endif %}
+        </div>
+        
+        <div class="plan-card plan-vip {% if current_user.subscription_type == 'vip' %}active{% endif %}">
+            <h4><i class="fas fa-crown"></i> VIP</h4>
+            <div class="price">100₽/мес</div>
+            <ul>
+                <li>Новые темы и цвета</li>
+                <li>Улучшенные картинки</li>
+                <li>Статус VIP</li>
+                <li><strong>3 слота навсегда</strong></li>
+            </ul>
+            <a href="{{ url_for('subscribe', plan_name='vip') }}" class="btn btn-vip">Активировать</a>
+        </div>
+        
+        <div class="plan-card plan-premium {% if current_user.subscription_type == 'premium' %}active{% endif %}">
+            <h4><i class="fas fa-gem"></i> Premium</h4>
+            <div class="price">200₽/мес</div>
+            <ul>
+                <li>Лучшая информация</li>
+                <li>3D изображения</li>
+                <li>Лучшие темы</li>
+                <li><strong>1 слот навсегда</strong></li>
+            </ul>
+            <a href="{{ url_for('subscribe', plan_name='premium') }}" class="btn btn-premium">Активировать</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

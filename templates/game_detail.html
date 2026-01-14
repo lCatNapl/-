@@ -1,0 +1,159 @@
+game_detail
+{% extends "base.html" %}
+
+{% block title %}{{ game.title }} - Узнавайкин{% endblock %}
+
+{% block content %}
+<div class="game-detail-container">
+    <!-- Основная информация -->
+    <div class="game-main-info">
+        <div class="game-visual">
+            {% if current_user.is_authenticated and current_user.subscription_type == 'premium' and game.image_premium_3d %}
+                <div class="premium-3d-viewer">
+                    <div class="threejs-canvas" data-model="{{ game.image_premium_3d }}">
+                        <div class="loading-3d">
+                            <i class="fas fa-cube fa-spin"></i>
+                            <p>Загрузка 3D модели...</p>
+                        </div>
+                    </div>
+                    <div class="viewer-controls">
+                        <button class="control-btn" data-action="rotate"><i class="fas fa-arrows-alt"></i></button>
+                        <button class="control-btn" data-action="zoom"><i class="fas fa-search-plus"></i></button>
+                    </div>
+                </div>
+            {% elif current_user.is_authenticated and current_user.subscription_type in ['vip', 'premium'] and game.image_vip %}
+                <div class="vip-image-container">
+                    <img src="{{ game.image_vip }}" alt="{{ game.title }}" class="main-image">
+                    <div class="vip-exclusive">VIP Изображение</div>
+                </div>
+            {% else %}
+                <img src="{{ game.image_start or '/static/images/default-game.jpg' }}" 
+                     alt="{{ game.title }}" class="main-image">
+            {% endif %}
+        </div>
+        
+        <div class="game-meta">
+            <h1>{{ game.title }}</h1>
+            
+            <div class="game-rating">
+                <div class="stars" style="--rating: {{ game.rating / 5 }}">
+                    ★★★★☆
+                </div>
+                <span class="rating-number">{{ "%.1f"|format(game.rating) }}/5</span>
+            </div>
+            
+            <div class="game-tags">
+                <span class="category-badge category-{{ game.category }}">{{ game.category }}</span>
+                {% if game.is_featured %}
+                    <span class="featured-tag">⭐ Рекомендуем</span>
+                {% endif %}
+                {% if current_user.is_authenticated and current_user.subscription_type != 'start' %}
+                    <span class="subscription-tag status-{{ current_user.subscription_type }}">
+                        {{ current_user.subscription_type.upper() }}
+                    </span>
+                {% endif %}
+            </div>
+            
+            <div class="game-actions">
+                <button class="btn btn-primary btn-large play-btn">
+                    <i class="fas fa-play"></i> Играть онлайн
+                </button>
+                <button class="btn-favorite" data-game-id="{{ game.id }}">
+                    <i class="far fa-heart"></i> В избранное
+                </button>
+                <button class="btn-share">
+                    <i class="fas fa-share-alt"></i> Поделиться
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Описание -->
+    <div class="game-description">
+        <h3>Описание</h3>
+        <div class="description-content">
+            {% if current_user.is_authenticated %}
+                {{ game.get_description(current_user.subscription_type)|safe }}
+            {% else %}
+                {{ game.get_description('start')|safe }}
+            {% endif %}
+            
+            {% if current_user.is_authenticated and current_user.subscription_type != 'premium' and game.image_premium_3d %}
+                <div class="upgrade-hint">
+                    <i class="fas fa-gem"></i>
+                    <p>🔥 Premium пользователи видят 3D модель этой игры!</p>
+                    <a href="{{ url_for('profile') }}" class="btn btn-premium">Перейти на Premium</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Дополнительная информация -->
+    <div class="game-details">
+        <div class="details-grid">
+            <div class="detail-card">
+                <h4><i class="fas fa-info-circle"></i> Информация</h4>
+                <ul>
+                    <li><strong>Категория:</strong> {{ game.category }}</li>
+                    <li><strong>Рейтинг:</strong> {{ "%.1f"|format(game.rating) }}/5</li>
+                    <li><strong>Статус:</strong> {% if game.is_featured %}Рекомендуемая{% else %}Обычная{% endif %}</li>
+                </ul>
+            </div>
+            
+            {% if current_user.is_authenticated %}
+            <div class="detail-card">
+                <h4><i class="fas fa-star"></i> Твой уровень доступа</h4>
+                <ul>
+                    <li><strong>Подписка:</strong> {{ current_user.subscription_type.upper() }}</li>
+                    <li><strong>Изображение:</strong> 
+                        {% if current_user.subscription_type == 'premium' and game.image_premium_3d %}3D{% 
+                        elif current_user.subscription_type in ['vip', 'premium'] and game.image_vip %}VIP{%
+                        else %}Стандарт{% endif %}</li>
+                    <li><strong>Описание:</strong> {{ game.get_description(current_user.subscription_type)|wordcount }} слов</li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Кнопка избранного
+    document.querySelector('.btn-favorite').addEventListener('click', function() {
+        const icon = this.querySelector('i');
+        if (icon.classList.contains('far')) {
+            icon.classList.remove('far');
+            icon.classList.add('fas');
+            icon.style.color = '#E74C3C';
+        } else {
+            icon.classList.remove('fas');
+            icon.classList.add('far');
+            icon.style.color = '';
+        }
+    });
+
+    // Кнопка поделиться
+    document.querySelector('.btn-share').addEventListener('click', function() {
+        if (navigator.share) {
+            navigator.share({
+                title: '{{ game.title }} - Узнавайкин',
+                url: window.location.href
+            });
+        } else {
+            navigator.clipboard.writeText(window.location.href);
+            alert('Ссылка скопирована!');
+        }
+    });
+
+    // 3D просмотрщик (заглушка)
+    const threejsCanvas = document.querySelector('.threejs-canvas');
+    if (threejsCanvas) {
+        // Здесь будет Three.js код для 3D моделей
+        console.log('Premium 3D viewer ready');
+    }
+});
+</script>
+{% endblock %}
