@@ -1,188 +1,183 @@
-from flask import Flask, request, render_template_string
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from flask_bcrypt import Bcrypt
-from datetime import datetime, timedelta
-import os
+from flask import Flask, request, redirect, url_for, session
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'uznavaykin-super-2026'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = 'uznavaykin-2026-super-secret'
 
-db = SQLAlchemy(app)
-bcrypt = Bcrypt(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+# Фейковые данные в памяти
+users = {
+    'CatNap': {'password': '120187', 'role': 'premium', 'admin': True},
+    'Назар': {'password': '120187', 'role': 'premium', 'admin': True}
+}
+user_roles = {}
+categories = ['Minecraft', 'World of Tanks', 'Блоки', 'Танки', 'СССР', 'Германия']
 
-# МОДЕЛИ
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True)
-    password = db.Column(db.String(120))
-    role = db.Column(db.String(20), default='start')
-    is_admin = db.Column(db.Boolean, default=False)
-
-class Category(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100))
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-def get_online_stats():
-    return {'total': 2, 'start': 1, 'vip': 0, 'premium': 1, 'admin': 0}
-
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    return '''
+    current_user = session.get('user')
+    stats = {'total': 3, 'start': 2, 'vip': 0, 'premium': 1, 'admin': 2}
+    
+    html = '''
     <!DOCTYPE html>
-    <html>
-    <head><title>Узнавайкин</title><meta charset="utf-8"></head>
-    <body style="font-family:Arial;">
-        <h1>🏠 Узнавайкин</h1>
-        {% if current_user.is_authenticated %}
-            <p>👤 {{current_user.username}} ({{current_user.role|upper}}) 
-            | <a href="/profile">Профиль</a> | <a href="/logout">Выход</a></p>
-            {% if current_user.role != "premium" %}
-            <p><a href="/buy/vip" style="color:blue">[VIP 100₽]</a> 
-            | <a href="/buy/premium" style="color:gold">[PREMIUM 200₽]</a></p>
-            {% endif %}
-        {% else %}
-            <p><a href="/login">🔐 Войти</a> | <a href="/register">📝 Регистрация</a></p>
-        {% endif %}
-        <p>👥 Онлайн: {{stats.total}} (S:{{stats.start}} V:{{stats.vip}} P:{{stats.premium}} A:{{stats.admin}})</p>
-        <hr>
-        <p><a href="/catalog">📁 Каталог</a> | <a href="/community">💬 TG</a></p>
-        {% if current_user.is_admin %}<p><a href="/admin">🔧 Админ</a></p>{% endif %}
-    </body>
-    </html>
-    '''.format(stats=get_online_stats())
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if not User.query.filter_by(username=username).first():
-            user = User(username=username)
-            user.password = bcrypt.generate_password_hash(password).decode('utf-8')
-            db.session.add(user)
-            db.session.commit()
-            return '<h2>✅ Зарегистрирован! <a href="/login">Войти</a></h2>'
-    return '''
-    <h2>📝 Регистрация</h2>
-    <form method="post">
-        Логин: <input name="username" required><br><br>
-        Пароль: <input name="password" type="password" required><br><br>
-        <button>Зарегистрироваться</button>
-    </form>
-    <p><a href="/login">Уже есть аккаунт?</a></p>
+    <html><head><title>Узнавайкин</title>
+    <meta charset="utf-8">
+    <style>body{font-family:Arial;padding:20px;max-width:800px;margin:auto;}</style></head>
+    <body>
     '''
+    
+    if current_user:
+        role = user_roles.get(current_user, 'start')
+        html += f'''
+        <h1>🏠 Узнавайкин</h1>
+        <p>👤 <b>{current_user}</b> ({role.upper()}) 
+        | <a href="/profile">👤 Профиль</a> | <a href="/logout">🚪 Выход</a></p>
+        '''
+        if role != 'premium':
+            html += '''
+            <p><a href="/buy/vip" style="background:blue;color:white;padding:10px;">[VIP 100₽]</a> 
+            <a href="/buy/premium" style="background:gold;color:black;padding:10px;">[PREMIUM 200₽]</a></p>
+            '''
+    else:
+        html += '''
+        <h1>🏠 Узнавайкин</h1>
+        <p><a href="/login" style="background:green;color:white;padding:10px;">🔐 ВОЙТИ</a> 
+        | <a href="/register" style="background:orange;color:white;padding:10px;">📝 РЕГИСТРАЦИЯ</a></p>
+        '''
+    
+    html += f'''
+        <p><b>👥 Онлайн:</b> {stats['total']} (S:{stats['start']} V:{stats['vip']} P:{stats['premium']} A:{stats['admin']})</p>
+        <hr>
+        <p><a href="/catalog">📁 Каталог</a> | <a href="/community">💬 Telegram</a></p>
+    '''
+    
+    if current_user and users.get(current_user, {}).get('admin'):
+        html += '<p><a href="/admin" style="background:red;color:white;padding:10px;">🔧 АДМИН ПАНЕЛЬ</a></p>'
+    
+    html += '</body></html>'
+    return html
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and bcrypt.check_password_hash(user.password, password):
-            login_user(user)
-            return '<h2>✅ Вошёл! <a href="/">На главную</a></h2>'
-        return '<h2>❌ Неверный логин/пароль <a href="/login">Повторить</a></h2>'
+        
+        if username in users and users[username]['password'] == password:
+            session['user'] = username
+            user_roles[username] = users[username]['role']
+            return redirect(url_for('index'))
+        elif username not in users:
+            # Регистрация новых
+            users[username] = {'password': password, 'role': 'start', 'admin': False}
+            user_roles[username] = 'start'
+            session['user'] = username
+            return redirect(url_for('index'))
+        
+        return '''
+        <!DOCTYPE html>
+        <html><head><title>Ошибка</title></head><body>
+        <h2>❌ Неверный логин/пароль!</h2>
+        <a href="/login">← Назад</a>
+        </body></html>
+        '''
+    
     return '''
-    <h2>🔐 Вход</h2>
-    <form method="post">
-        Логин: <input name="username" required><br><br>
-        Пароль: <input name="password" type="password" required><br><br>
-        <button>Войти</button>
+    <!DOCTYPE html>
+    <html><head><title>Вход</title>
+    <style>body{font-family:Arial;padding:50px;text-align:center;}</style></head>
+    <body>
+    <h1>🔐 Вход / Регистрация</h1>
+    <form method="post" style="max-width:300px;margin:auto;">
+        <p>Логин: <input name="username" style="width:100%;padding:10px;" required></p>
+        <p>Пароль: <input name="password" type="password" style="width:100%;padding:10px;" required></p>
+        <button style="width:100%;padding:15px;background:green;color:white;border:none;font-size:18px;">ВОЙТИ</button>
     </form>
-    <p><a href="/register">Нет аккаунта?</a></p>
+    <p><small>Админы: CatNap / 120187 | Назар / 120187</small></p>
+    </body></html>
     '''
 
 @app.route('/logout')
-@login_required
 def logout():
-    logout_user()
-    return '<h2>👋 Выход <a href="/">Главная</a></h2>'
+    session.pop('user', None)
+    return redirect(url_for('index'))
 
 @app.route('/buy/<role>')
-@login_required
 def buy_role(role):
-    current_user.role = role
-    db.session.commit()
-    return f'<h2>✅ Купил {role.upper()}! <a href="/">Главная</a></h2>'
+    if 'user' in session:
+        user_roles[session['user']] = role
+    return redirect(url_for('index'))
 
-@app.route('/profile/')
-@login_required
+@app.route('/profile')
 def profile():
-    stats = get_online_stats()
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    user = session['user']
+    role = user_roles.get(user, 'start')
     return f'''
-    <h1>👤 {current_user.username}</h1>
-    <p>Роль: {current_user.role.upper()}</p>
-    <p>Онлайн: {stats["total"]}</p>
-    <a href="/">🏠 Главная</a>
+    <!DOCTYPE html>
+    <html><head><title>Профиль</title></head><body style="font-family:Arial;padding:50px;">
+    <h1>👤 {user}</h1>
+    <h2>Роль: <span style="color:gold;">{role.upper()}</span></h2>
+    <p><a href="/">🏠 Главная</a></p>
+    </body></html>
     '''
 
 @app.route('/catalog')
 def catalog():
-    cats = Category.query.all()
-    html = '<h1>📁 Каталог</h1><a href="/">🏠</a><br>'
-    for cat in cats:
-        html += f'<div style="margin:10px;border:1px solid #ccc;padding:10px;">📁 {cat.name}</div>'
+    html = '''
+    <!DOCTYPE html>
+    <html><head><title>Каталог</title></head><body style="font-family:Arial;padding:20px;">
+    <h1>📁 Каталог</h1>
+    <a href="/">🏠 Главная</a>
+    '''
+    
+    for i, cat in enumerate(categories):
+        html += f'''
+        <div style="margin:20px;border:2px solid #ccc;padding:20px;border-radius:10px;">
+            📁 <b>{cat}</b>
+        </div>
+        '''
+    
+    html += '</body></html>'
     return html
 
 @app.route('/community')
 def community():
     return '''
+    <!DOCTYPE html>
+    <html><head><title>Сообщество</title></head><body style="font-family:Arial;padding:50px;text-align:center;">
     <h1>💬 Сообщество</h1>
-    <a href="https://t.me/ssylkanatelegramkanalyznaikin">Telegram канал</a>
-    <br><a href="/">🏠 Главная</a>
+    <h2><a href="https://t.me/ssylkanatelegramkanalyznaikin" style="color:blue;">Telegram канал</a></h2>
+    <p><a href="/">🏠 Главная</a></p>
+    </body></html>
     '''
 
-@app.route('/admin', methods=['GET', 'POST'])
-@login_required
+@app.route('/admin')
 def admin():
-    if not current_user.is_admin:
-        return '<h2>❌ Только админы!</h2><a href="/">Главная</a>'
-    if request.method == 'POST':
-        name = request.form['name']
-        cat = Category(name=name)
-        db.session.add(cat)
-        db.session.commit()
-        return '<h2>✅ Категория добавлена! <a href="/admin">Продолжить</a></h2>'
+    if 'user' not in session or not users.get(session['user'], {}).get('admin'):
+        return '<h1>❌ Только для админов!</h1><a href="/">Главная</a>'
+    
     return '''
+    <!DOCTYPE html>
+    <html><head><title>Админ</title></head><body style="font-family:Arial;padding:50px;">
     <h1>🔧 Админ панель</h1>
-    <a href="/">🏠</a>
-    <h3>Добавить категорию:</h3>
-    <form method="post">
-        <input name="name" placeholder="Название категории">
+    <p>Добавляй категории:</p>
+    <form method="post" action="/admin/add">
+        <input name="category" placeholder="Название категории">
         <button>Добавить</button>
     </form>
+    <p><a href="/">🏠 Главная</a></p>
+    </body></html>
     '''
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        
-        # Создаём админов
-        for user_data in [
-            {'username': 'CatNap', 'password': '120187', 'is_admin': True},
-            {'username': 'Назар', 'password': '120187', 'is_admin': True}
-        ]:
-            user = User.query.filter_by(username=user_data['username']).first()
-            if not user:
-                user = User(**user_data)
-                user.password = bcrypt.generate_password_hash(user_data['password']).decode('utf-8')
-                db.session.add(user)
-        db.session.commit()
-        
-        # Создаём категории
-        for name in ['Minecraft', 'World of Tanks', 'Блоки', 'Танки']:
-            if not Category.query.filter_by(name=name).first():
-                db.session.add(Category(name=name))
-        db.session.commit()
+@app.route('/admin/add', methods=['POST'])
+def admin_add():
+    if 'user' in session and users.get(session['user'], {}).get('admin'):
+        new_cat = request.form['category']
+        if new_cat:
+            categories.append(new_cat)
     
-    app.run(debug=False)
+    return redirect(url_for('admin'))
+
+if __name__ == '__main__':
+    app.run(debug=False, host='0.0.0.0')
