@@ -216,7 +216,7 @@ with app.app_context():
     
     # Админы PREMIUM
     admins = [
-        {'username': 'CatNap', 'email': 'catnap@uznavaykin.ru', 'password': '120187', 'role': 'premium', 'is_admin': True},
+        {'username': 'CatNap', 'email': 'nazartrahov10@gmail.com', 'password': '120187', 'role': 'premium', 'is_admin': True},
         {'username': 'Назар', 'email': 'nazartrahov1@gmail.com', 'password': '120187', 'role': 'premium', 'is_admin': True}
     ]
     
@@ -241,3 +241,4 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
