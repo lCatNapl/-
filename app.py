@@ -52,15 +52,15 @@ class Info(db.Model):
     image_url = db.Column(db.String(200))
     is_3d = db.Column(db.Boolean, default=False)
 
-# ПУНКТ 9: Умный поиск
+# Заменяем функцию smart_search() на простую:
 def smart_search(query):
     all_infos = Info.query.all()
     results = []
     query_lower = query.lower()
     
-    # Точный поиск + fuzzy + переводы + похожие
+    # Простой поиск БЕЗ C-расширений
     translations = {
-        'minecraft': ['майнкрафт', 'майк', 'mc'],
+        'minecraft': ['майнкрафт', 'майк', 'mc', 'minecraft'],
         'wargaming': ['ворлд оф танкс', 'танки', 'wot', 'world of tanks'],
         'дерн': ['grass', 'трава'], 'земля': ['dirt', 'грунт'],
         'ссср': ['советский союз', 'russia', 'совок']
@@ -71,20 +71,27 @@ def smart_search(query):
         # Точное совпадение
         if query_lower in info.title.lower() or query_lower in info.description.lower():
             score += 100
-        # Fuzzy similarity
-        score += fuzzywuzzy.fuzz.ratio(query_lower, info.title.lower())
-        score += fuzzywuzzy.fuzz.ratio(query_lower, info.category.lower())
         
-        # Переводы и наводки
+        # Простое fuzzy (без Levenshtein)
+        def simple_fuzzy(s1, s2):
+            min_len = min(len(s1), len(s2))
+            matches = sum(1 for a, b in zip(s1, s2) if a == b)
+            return (matches / min_len) * 100 if min_len > 0 else 0
+        
+        score += simple_fuzzy(query_lower, info.title.lower())
+        score += simple_fuzzy(query_lower, info.category.lower())
+        
+        # Переводы
         for eng, rus in translations.items():
-            if query_lower in rus or eng in query_lower:
+            if query_lower in str(rus) + [eng]:
                 if eng in info.title.lower() or eng in info.category.lower():
                     score += 50
         
-        if score > 30:  # Порог релевантности
+        if score > 30:
             results.append((info, score))
     
     return sorted(results, key=lambda x: x[1], reverse=True)[:10]
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -216,3 +223,4 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
