@@ -1,56 +1,13 @@
-{% extends "base.html" %}
-{% block content %}
-<!-- ГЕРОЙСКИЙ БАННЕР ПО PRIVILEGE -->
-<div class="hero hero-{{ privilege }}">
-    <div class="hero-content">
-        <h1 class="hero-title">
-            <i class="fas fa-database"></i> 
-            УЗНАВАЙКИН {{ privilege|upper }}
-        </h1>
-        <p class="hero-subtitle">
-            {% if privilege == 'premium' %}
-                Лучшая информация + 3D модели
-            {% elif privilege == 'vip' %}
-                Эксклюзивная информация + новые темы  
-            {% else %}
-                Базовая информация для всех
-            {% endif %}
-        </p>
-    </div>
-</div>
-
-<!-- КАТАЛОГ ИНФО -->
-<div class="section catalog-preview">
-    <h2><i class="fas fa-list"></i> Популярная информация</h2>
-    <div class="games-grid">
-        {% for item in featured %}
-        <a href="{{ url_for('info_detail', info_id=item.id) }}" class="info-card info-{{ privilege }}">
-            <div class="info-image" style="background-image: url('{{ item.image or '/static/img/default.jpg' }}')">
-                {% if privilege == 'premium' and item.is_premium %}
-                    <span class="premium-badge">3D</span>
-                {% endif %}
-            </div>
-            <div class="info-content">
-                <h3>{{ item.game }} → {{ item.faction }}</h3>
-                <p class="info-item">{{ item.item }}</p>
-                {% if item.level %}
-                    <span class="level-badge">Ур. {{ item.level }}</span>
-                {% endif %}
-                <span class="views">{{ item.views }} просмотров</span>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- КНОПКИ КАТАЛОГОВ -->
-<div class="catalog-buttons">
-    <a href="{{ url_for('catalog', game_name='Майнкрафт') }}" class="catalog-btn minecraft">
-        <i class="fab fa-minecraft"></i> МАЙНКРАФТ
-    </a>
-    <a href="{{ url_for('catalog', game_name='Танки') }}" class="catalog-btn tanks">
-        <i class="fas fa-crosshairs"></i> ТАНКИ
-    </a>
-</div>
-{% endblock %}
-
+<!DOCTYPE html>
+<html>
+<head><title>Узнавайкин</title></head>
+<body>
+    <h1>🏠 Главная</h1>
+    <p>Онлайн: {{stats.total}} (Start:{{stats.start}} VIP:{{stats.vip}} Premium:{{stats.premium}} Admin:{{stats.admin}})</p>
+    <a href="/catalog/">📁 Каталог</a> | <a href="/profile/">👤 Профиль</a> | <a href="/admin/">🔧 Админ</a>
+    <h3>Популярное:</h3>
+    {% for info in popular %}
+    <div>{{info.title}} ({{info.views}} просмотров) <a href="/info/{{info.id}}">Подробнее</a></div>
+    {% endfor %}
+</body>
+</html>
