@@ -1,46 +1,10 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="profile-container">
-    <div class="profile-header">
-        <div class="avatar-section">
-            <img src="{{ current_user.avatar or '/static/img/default-avatar.png' }}" alt="Avatar" class="avatar">
-            <h2>{{ current_user.username }}</h2>
-            <div class="status-badge status-{{ current_user.subscription|lower }}">
-                {{ current_user.subscription|upper }}
-                {% if current_user.subscription_expires %}
-                    до {{ current_user.subscription_expires.strftime('%d.%m.%Y') }}
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <div class="profile-stats">
-        <div class="stat">
-            <i class="fas fa-gamepad"></i>
-            <span>{{ current_user.plays_total }} игр сыграно</span>
-        </div>
-        <div class="stat">
-            <i class="fas fa-calendar"></i>
-            <span>С {% for p in current_user.purchases|reverse %}{{ p.purchased_at.strftime('%d.%m.%Y') }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
-        </div>
-    </div>
-
-    <div class="subscription-actions">
-        <a href="{{ url_for('subscribe', sub_type='vip') }}" class="btn vip-btn">
-            <i class="fas fa-crown"></i> VIP (100₽/мес)
-        </a>
-        <a href="{{ url_for('subscribe', sub_type='premium') }}" class="btn premium-btn">
-            <i class="fas fa-gem"></i> Premium (200₽/мес)
-        </a>
-    </div>
-
-    <div class="profile-edit">
-        <h3><i class="fas fa-edit"></i> Редактировать профиль</h3>
-        <form method="POST" action="{{ url_for('edit_profile') }}">
-            <textarea name="bio" placeholder="О себе...">{{ current_user.bio or '' }}</textarea>
-            <input type="url" name="avatar" placeholder="Ссылка на аватар" value="{{ current_user.avatar or '' }}">
-            <button type="submit" class="btn save-btn">Сохранить</button>
-        </form>
-    </div>
-</div>
-{% endblock %}
+<!DOCTYPE html>
+<html><head><title>Профиль {{current_user.username}}</title></head>
+<body>
+    <h1>👤 {{current_user.username}}</h1>
+    <p>Роль: {{current_user.role|upper}}</p>
+    <p>Просмотров: {{current_user.views_count}}</p>
+    <p>Онлайн: {{stats.total}}</p>
+    <a href="/">🏠</a>
+</body>
+</html>
